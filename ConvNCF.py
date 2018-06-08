@@ -32,6 +32,7 @@ _output = None
 TRAIN_KEEP_PROB = 1
 TEST_KEEP_PROB = 1
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Run MF-BPR.")
     parser.add_argument('--path', nargs='?', default='Data/',
@@ -62,7 +63,7 @@ def parse_args():
                         help='Learning rate for embeddings.')
     parser.add_argument('--lr_net', type=float, default=0.05,
                         help='Learning rate for CNN.')
-    parser.add_argument('--net_channel', nargs='?', default='[32,32,32,32,32,32]',	
+    parser.add_argument('--net_channel', nargs='?', default='[32,32,32,32,32,32]',
                         help='net_channel, should be 6 layers here')
     parser.add_argument('--pretrain', type=int, default=0,
                         help='Use the pretraining weights or not')
@@ -75,7 +76,7 @@ def parse_args():
     return parser.parse_args()
 
 
-#---------- data preparation -------
+# ---------- data preparation -------
 
 # data sampling and shuffling
 
@@ -89,6 +90,7 @@ def sampling(dataset):
         _item_input_pos.append(i)
     return _user_input, _item_input_pos
 
+
 def shuffle(samples, batch_size, dataset, model):
     global _user_input
     global _item_input_pos
@@ -98,7 +100,7 @@ def shuffle(samples, batch_size, dataset, model):
     global _dataset
     _user_input, _item_input_pos = samples
     _batch_size = batch_size
-    _index = range(len(_user_input))
+    _index = np.array(range(len(_user_input)))
     _model = model
     _dataset = dataset
     np.random.shuffle(_index)
@@ -112,6 +114,7 @@ def shuffle(samples, batch_size, dataset, model):
     user_dns_list = [r[2] for r in res]
     item_dns_list = [r[3] for r in res]
     return user_list, item_pos_list, user_dns_list, item_dns_list
+
 
 def _get_train_batch(i):
     user_batch, item_batch = [], []
@@ -129,18 +132,21 @@ def _get_train_batch(i):
             while j in _dataset.trainList[_user_input[_index[idx]]] or j == gtItem:
                 j = np.random.randint(_dataset.num_items)
             item_neg_batch.append(j)
-    return np.array(user_batch)[:,None], np.array(item_batch)[:,None], \
-           np.array(user_neg_batch)[:,None], np.array(item_neg_batch)[:,None]
+    return np.array(user_batch)[:, None], np.array(item_batch)[:, None], \
+           np.array(user_neg_batch)[:, None], np.array(item_neg_batch)[:, None]
 
-#---------- model definition -------
+
+# ---------- model definition -------
 
 def weight_variable(shape):
-  initial = tf.truncated_normal(shape, stddev=0.1)
-  return tf.Variable(initial)
+    initial = tf.truncated_normal(shape, stddev=0.1)
+    return tf.Variable(initial)
+
 
 def bias_variable(shape):
-  initial = tf.constant(0.1, shape=shape)
-  return tf.Variable(initial)
+    initial = tf.constant(0.1, shape=shape)
+    return tf.Variable(initial)
+
 
 # prediction model
 class ConvNCF:
@@ -162,13 +168,13 @@ class ConvNCF:
 
     def _create_placeholders(self):
         with tf.name_scope("input_data"):
-            self.user_input = tf.placeholder(tf.int32, shape = [None, 1], name = "user_input")
-            self.item_input_pos = tf.placeholder(tf.int32, shape = [None, 1], name = "item_input_pos")
-            self.item_input_neg = tf.placeholder(tf.int32, shape = [None, 1], name = "item_input_neg")
-            self.keep_prob = tf.placeholder(tf.float32, name = "keep_prob")
+            self.user_input = tf.placeholder(tf.int32, shape=[None, 1], name="user_input")
+            self.item_input_pos = tf.placeholder(tf.int32, shape=[None, 1], name="item_input_pos")
+            self.item_input_neg = tf.placeholder(tf.int32, shape=[None, 1], name="item_input_neg")
+            self.keep_prob = tf.placeholder(tf.float32, name="keep_prob")
 
     def _conv_weight(self, isz, osz):
-        return (weight_variable([2,2,isz,osz]), bias_variable([osz]))
+        return (weight_variable([2, 2, isz, osz]), bias_variable([osz]))
 
     def _conv_layer(self, input, P):
         conv = tf.nn.conv2d(input, P[0], strides=[1, 2, 2, 1], padding='SAME')
@@ -176,10 +182,12 @@ class ConvNCF:
 
     def _create_variables(self):
         with tf.name_scope("embedding"):
-            self.embedding_P = tf.Variable(tf.truncated_normal(shape=[self.num_users, self.embedding_size], mean=0.0, stddev=0.01),
-                                                                name='embedding_P', dtype=tf.float32)  #(users, embedding_size)
-            self.embedding_Q = tf.Variable(tf.truncated_normal(shape=[self.num_items, self.embedding_size], mean=0.0, stddev=0.01),
-                                                                name='embedding_Q', dtype=tf.float32)  #(items, embedding_size)
+            self.embedding_P = tf.Variable(
+                tf.truncated_normal(shape=[self.num_users, self.embedding_size], mean=0.0, stddev=0.01),
+                name='embedding_P', dtype=tf.float32)  # (users, embedding_size)
+            self.embedding_Q = tf.Variable(
+                tf.truncated_normal(shape=[self.num_items, self.embedding_size], mean=0.0, stddev=0.01),
+                name='embedding_Q', dtype=tf.float32)  # (items, embedding_size)
 
             # here should have 6 iszs due to the size of outer products is 64x64
             iszs = [1] + self.nc[:-1]
@@ -210,10 +218,9 @@ class ConvNCF:
 
             # prediction
             self.dropout = tf.nn.dropout(self.layer[-1], self.keep_prob)
-            self.output_layer = tf.matmul(tf.reshape(self.dropout,[-1,self.nc[-1]]), self.W) + self.b
+            self.output_layer = tf.matmul(tf.reshape(self.dropout, [-1, self.nc[-1]]), self.W) + self.b
 
             return self.embedding_p, self.embedding_q, self.output_layer
-
 
     def _regular(self, params):
         res = 0
@@ -229,10 +236,11 @@ class ConvNCF:
             self.result = self.output - self.output_neg
             self.loss = tf.reduce_sum(tf.log(1 + tf.exp(-self.result)))
 
-            self.opt_loss = self.loss + self.lambda_bilinear * ( tf.reduce_sum(tf.square(self.p1)) \
-                                    + tf.reduce_sum(tf.square(self.q2)) + tf.reduce_sum(tf.square(self.q1)))\
-                                    + self.gamma_bilinear * self._regular([(self.W, self.b)]) \
-                                    + self.lambda_weight * (self._regular(self.P) + self._regular([(self.W, self.b)]))
+            self.opt_loss = self.loss + self.lambda_bilinear * (tf.reduce_sum(tf.square(self.p1)) \
+                                                                + tf.reduce_sum(tf.square(self.q2)) + tf.reduce_sum(
+                        tf.square(self.q1))) \
+                            + self.gamma_bilinear * self._regular([(self.W, self.b)]) \
+                            + self.lambda_weight * (self._regular(self.P) + self._regular([(self.W, self.b)]))
 
     # used at the first time when emgeddings are pretrained yet network are randomly initialized
     # if not, the parameters may be NaN.
@@ -242,7 +250,7 @@ class ConvNCF:
     def _create_optimizer(self):
         # seperated optimizer
         var_list1 = [self.embedding_P, self.embedding_Q]
-        #[self.W1,self.W2,self.W3,self.W4,self.b1,self.b2,self.b3,self.b4,self.P1,self.P2,self.P3]
+        # [self.W1,self.W2,self.W3,self.W4,self.b1,self.b2,self.b3,self.b4,self.P1,self.P2,self.P3]
         var_list2 = list(set(tf.trainable_variables()) - set(var_list1))
         opt1 = tf.train.AdagradOptimizer(self.lr_embed)
         opt2 = tf.train.AdagradOptimizer(self.lr_net)
@@ -253,28 +261,27 @@ class ConvNCF:
         train_op2 = opt2.apply_gradients(zip(grads2, var_list2))
         self.optimizer = tf.group(train_op1, train_op2)
 
-
     def build_graph(self):
         self._create_placeholders()
         self._create_variables()
         self._create_loss()
-    	self._create_pre_optimizer()
+        self._create_pre_optimizer()
         self._create_optimizer()
 
     def load_parameter_MF(self, sess, path):
         ps = np.load(path)
         ap = tf.assign(self.embedding_P, ps[0])
         aq = tf.assign(self.embedding_Q, ps[1])
-        #ah = tf.assign(self.h, np.diag(ps[2][:,0]).reshape(4096,1))
-        sess.run([ap,aq])
-        print "parameter loaded"
+        # ah = tf.assign(self.h, np.diag(ps[2][:,0]).reshape(4096,1))
+        sess.run([ap, aq])
+        print("parameter loaded")
 
     def load_parameter_logloss(self, sess, path):
         ps = np.load(path).tolist()
         ap = tf.assign(self.embedding_P, ps['P'])
         aq = tf.assign(self.embedding_Q, ps['Q'])
-        sess.run([ap,aq])
-        print "logloss parameter loaded"
+        sess.run([ap, aq])
+        print("logloss parameter loaded")
 
     def save_net_parameters(self, sess, path):
         pass
@@ -287,19 +294,21 @@ class ConvNCF:
             # if not, the parameters may be NaN.
             return self.pre_opt
 
+
 def dxyeval(sess, model, dataset):
     eval_feed_dicts = init_eval_model(model, dataset)
     hr, ndcg, auc, train_auc = evaluate(model, sess, dataset, eval_feed_dicts)
     res = "Epoch: HR = %.4f, NDCG = %.4f AUC = %.4f train_AUC = %.4f" % (hr, ndcg, auc, train_auc)
-    print res
+    print(res)
 
-#---------- training -------
+
+# ---------- training -------
 
 # training
-def training(model, dataset, args, saver = None): # saver is an object to save pq
+def training(model, dataset, args, saver=None):  # saver is an object to save pq
     with tf.Session() as sess:
         # initialized the save op
-        ckpt_save_path = "Pretrain/dropout/%s_embed_%s/" %  (args.dataset, "_".join(map(str,model.nc)))
+        ckpt_save_path = "Pretrain/dropout/%s_embed_%s/" % (args.dataset, "_".join(map(str, model.nc)))
         ckpt_save_file = str(TRAIN_KEEP_PROB) + '_'.join(map(str, eval(args.regs)))
         if not os.path.exists(ckpt_save_path):
             os.makedirs(ckpt_save_path)
@@ -311,9 +320,9 @@ def training(model, dataset, args, saver = None): # saver is an object to save p
 
         # restore the weights when pretrained
         if args.pretrain:
-            #saver_ckpt.restore(sess, "Pretrain/MF_BPR/embed_32_32_32_32_32_32/1e-06_0_10-1440")
+            # saver_ckpt.restore(sess, "Pretrain/MF_BPR/embed_32_32_32_32_32_32/1e-06_0_10-1440")
             model.load_parameter_MF(sess, "best_%s_MF.npy" % args.dataset)
-            dxyeval(sess,model,dataset)
+            dxyeval(sess, model, dataset)
 
         # initialize for Evaluate
         eval_feed_dicts = init_eval_model(model, dataset)
@@ -321,43 +330,44 @@ def training(model, dataset, args, saver = None): # saver is an object to save p
         # sample the data
         samples = sampling(dataset)
 
-        #initialize the max_ndcg to memorize the best result
+        # initialize the max_ndcg to memorize the best result
         max_ndcg = 0
         max_res = " "
 
         # train by epoch
         for epoch_count in range(args.epochs):
-            print "start epoch", epoch_count
+            print("start epoch", epoch_count)
             # initialize for training batches
             batch_begin = time()
             batches = shuffle(samples, args.batch_size, dataset, model)
             batch_time = time() - batch_begin
 
             # compute the accuracy before training
-            _, prev_acc = 0,0 #training_loss_acc(model, sess, prev_batch)
+            _, prev_acc = 0, 0  # training_loss_acc(model, sess, prev_batch)
 
             # training the model
             train_begin = time()
             train_batches = training_batch(model, sess, batches)
             train_time = time() - train_begin
 
-            print "batch cost:", batch_time, 'train cost:', train_time
+            print("batch cost:", batch_time, 'train cost:', train_time)
             if epoch_count % args.verbose == 0:
                 _, ndcg, cur_res = output_evaluate(model, sess, dataset, train_batches, eval_feed_dicts,
-                                epoch_count, batch_time, train_time, prev_acc)
+                                                   epoch_count, batch_time, train_time, prev_acc)
 
                 # print and log the best result
                 if max_ndcg < ndcg:
                     max_ndcg = ndcg
                     max_res = cur_res
-                    saver_ckpt.save(sess, ckpt_save_path+ckpt_save_file, global_step=epoch_count)
-                    print "saved best", epoch_count
+                    saver_ckpt.save(sess, ckpt_save_path + ckpt_save_file, global_step=epoch_count)
+                    print("saved best", epoch_count)
 
-        print "best:" + max_res
+        print("best:" + max_res)
         logging.info("best:" + max_res)
 
 
-def output_evaluate(model, sess, dataset, train_batches, eval_feed_dicts, epoch_count, batch_time, train_time, prev_acc):
+def output_evaluate(model, sess, dataset, train_batches, eval_feed_dicts, epoch_count, batch_time, train_time,
+                    prev_acc):
     loss_begin = time()
     train_loss, post_acc = training_loss_acc(model, sess, train_batches)
     loss_time = time() - loss_begin
@@ -367,13 +377,16 @@ def output_evaluate(model, sess, dataset, train_batches, eval_feed_dicts, epoch_
     eval_time = time() - eval_begin
 
     res = "Epoch %d [%.1fs + %.1fs]: HR = %.4f, NDCG = %.4f AUC = %.4f train_AUC = %.4f [%.1fs]" \
-        " ACC = %.4f train_loss = %.4f ACC = %.4f [%.1fs]" % ( epoch_count, batch_time, train_time,
-                    hr, ndcg, auc, train_auc, eval_time, prev_acc, train_loss, post_acc, loss_time)
+          " ACC = %.4f train_loss = %.4f ACC = %.4f [%.1fs]" % (epoch_count, batch_time, train_time,
+                                                                hr, ndcg, auc, train_auc, eval_time, prev_acc,
+                                                                train_loss, post_acc, loss_time)
 
     logging.info(res)
-    print res
+    print
+    res
 
     return post_acc, ndcg, res
+
 
 # input: batch_index (shuffled), model, sess, batches
 # do: train the model optimizer
@@ -403,9 +416,9 @@ def training_batch(model, sess, batches):
             # select the best negtive sample as for item_input_neg
             item_neg_batch = []
             for j in range(0, len(output_neg), model.dns):
-                item_index = np.argmax(output_neg[j : j + model.dns])
-                item_neg_batch.append(item_dns_list[i][j : j + model.dns][item_index][0])
-            item_neg_batch = np.array(item_neg_batch)[:,None]
+                item_index = np.argmax(output_neg[j: j + model.dns])
+                item_neg_batch.append(item_dns_list[i][j: j + model.dns][item_index][0])
+            item_neg_batch = np.array(item_neg_batch)[:, None]
             # for mini-batch BPR training
             feed_dict = {model.user_input: user_input[i],
                          model.item_input_pos: item_input_pos[i],
@@ -414,6 +427,7 @@ def training_batch(model, sess, batches):
             sess.run(model.get_optimizer(), feed_dict)
             item_input_neg.append(item_neg_batch)
     return user_input, item_input_pos, item_input_neg
+
 
 # input: model, sess, batches
 # output: training_loss
@@ -427,12 +441,13 @@ def training_loss_acc(model, sess, train_batches):
         feed_dict = {model.user_input: user_input[i],
                      model.item_input_pos: item_input_pos[i],
                      model.item_input_neg: item_input_neg[i],
-                         model.keep_prob: TEST_KEEP_PROB}
+                     model.keep_prob: TEST_KEEP_PROB}
 
         loss, output_pos, output_neg = sess.run([model.loss, model.output, model.output_neg], feed_dict)
         train_loss += loss
         acc += ((output_pos - output_neg) > 0).sum() / len(output_pos)
     return train_loss / num_batch, acc / num_batch
+
 
 def init_eval_model(model, dataset):
     global _dataset
@@ -448,13 +463,14 @@ def init_eval_model(model, dataset):
     print("already load the evaluate model...")
     return feed_dicts
 
+
 def _evaluate_input(user):
     # generate items_list
-    item_input = dataset.testNegatives[user] # read negative samples from files
+    item_input = dataset.testNegatives[user]  # read negative samples from files
     test_item = _dataset.testRatings[user][1]
     item_input.append(test_item)
     user_input = np.full(len(item_input), user, dtype='int32')[:, None]
-    item_input = np.array(item_input)[:,None]
+    item_input = np.array(item_input)[:, None]
     return user_input, item_input
 
 
@@ -475,12 +491,13 @@ def evaluate(model, sess, dataset, feed_dicts):
     for user in range(_dataset.num_users):
         res.append(_eval_by_user(user))
     res = np.array(res)
-    result = (res.mean(axis = 0)).tolist()
-    print result
+    result = (res.mean(axis=0)).tolist()
+    print(result)
 
     hr, ndcg, auc, train_auc = result[3:6] + [0]
 
     return hr, ndcg, auc, train_auc
+
 
 def scoreK(K, position, negs):
     hr = position < K
@@ -491,28 +508,28 @@ def scoreK(K, position, negs):
     auc = 1 - (position * 1. / negs)  # formula: [#(Xui>Xuj) / #(Items)] = [1 - #(Xui<=Xuj) / #(Items)]
     return hr, ndcg, auc
 
-def _eval_by_user(user):
 
+def _eval_by_user(user):
     if _model.train_auc:
         # get predictions of positive samples in training set
         train_item_input = _dataset.trainList[user]
         train_user_input = np.full(len(train_item_input), user, dtype='int32')[:, None]
         train_item_input = np.array(train_item_input)[:, None]
         feed_dict = {_model.user_input: train_user_input, _model.item_input_pos: train_item_input,
-                         model.keep_prob: TEST_KEEP_PROB}
+                     model.keep_prob: TEST_KEEP_PROB}
 
         train_predict = _sess.run(_model.output, feed_dict)
 
     # get prredictions of data in testing set
     user_input, item_input = _feed_dicts[user]
     feed_dict = {_model.user_input: user_input, _model.item_input_pos: item_input,
-                         model.keep_prob: TEST_KEEP_PROB}
+                 model.keep_prob: TEST_KEEP_PROB}
 
     predictions = _sess.run(_model.output, feed_dict)
 
     nan_pos = np.argwhere(np.isnan(predictions))
     if len(nan_pos) > 0:
-        print "contain nan", nan_pos
+        print("contain nan", nan_pos)
         exit()
     neg_predict, pos_predict = predictions[:-1], predictions[-1]
     position = (neg_predict >= pos_predict).sum()
@@ -532,11 +549,12 @@ def _eval_by_user(user):
     # calculate HR@K, NDCG@K, AUC
     hr = position < _K
     if hr:
-        ndcg = math.log(2) / math.log(position+2)
+        ndcg = math.log(2) / math.log(position + 2)
     else:
         ndcg = 0
     auc = 1 - (position * 1. / len(neg_predict))  # formula: [#(Xui>Xuj) / #(Items)] = [1 - #(Xui<=Xuj) / #(Items)]
     return hr, ndcg, auc, train_auc
+
 
 def init_logging(args):
     regs = eval(args.regs)
@@ -544,40 +562,37 @@ def init_logging(args):
     if not os.path.exists(path):
         os.makedirs(path)
     fpath = path + "%s_embed_size%.4f_lambda1%.7f_reg2%.7f%s" % (
-        args.dataset, args.embed_size, regs[0], regs[1],strftime('%Y_%m_%d_%H_%M_%S', localtime()))
+        args.dataset, args.embed_size, regs[0], regs[1], strftime('%Y_%m_%d_%H_%M_%S', localtime()))
     logging.basicConfig(filename=fpath,
                         level=logging.INFO)
-    print "log to", fpath
+    print("log to", fpath)
     logging.info("begin training %s model ......" % args.model)
     logging.info("dataset:%s  embedding_size:%d   dns:%d    batch_size:%d"
                  % (args.dataset, args.embed_size, args.dns, args.batch_size))
-    print "dataset:%s  embedding_size:%d   dns:%d   batch_szie:%d" \
-                 % (args.dataset, args.embed_size, args.dns, args.batch_size)
+    print("dataset:%s  embedding_size:%d   dns:%d   batch_szie:%d" \
+          % (args.dataset, args.embed_size, args.dns, args.batch_size))
     logging.info("regs:%.8f, %.8f  learning_rate:(%.4f, %.4f)"
                  % (regs[0], regs[1], args.lr_embed, args.lr_net))
-    print "regs:%.8f, %.8f  learning_rate:(%.4f, %.4f)" \
-                 % (regs[0], regs[1], args.lr_embed, args.lr_net)
-    print str(args)
+    print("regs:%.8f, %.8f  learning_rate:(%.4f, %.4f)" \
+          % (regs[0], regs[1], args.lr_embed, args.lr_net))
+    print(str(args))
     logging.info(str(args))
 
-if __name__ == '__main__':
 
+if __name__ == '__main__':
     # initialize logging
     args = parse_args()
     init_logging(args)
     TRAIN_KEEP_PROB = args.keep
 
-    #initialize dataset
+    # initialize dataset
     dataset = Dataset(args.path + args.dataset)
 
-    #initialize models
+    # initialize models
     model = ConvNCF(dataset.num_users, dataset.num_items, args)
     model.build_graph()
 
-    #start trainging
-    #saver = GMFSaver()
-    #saver.setPrefix("./param")
+    # start trainging
+    # saver = GMFSaver()
+    # saver.setPrefix("./param")
     training(model, dataset, args)
-
-
-
